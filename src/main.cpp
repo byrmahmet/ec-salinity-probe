@@ -24,7 +24,7 @@
 /*!
    \file main.cpp
    \brief Main source file for EC Salinity probe firmware
-*/
+ */
 
 #include "main.h"
 
@@ -35,28 +35,26 @@ float K;                              /**< Cell constant K of probe */
 static const int pinResistance = 23;
 static const int Resistor = 500;
 
-
- /*!
-    \brief Called when data is requested over the I2C bus. Sends #Conductivity,
-    #Temperature, and #K
+/*!
+   \brief Called when data is requested over the I2C bus. Sends #Conductivity,
+   #Temperature, and #K
  */
 void requestEvent()
 {
-        TinyWireS.send( *((uint8_t *)&Conductivity ) );
-        TinyWireS.send( *((uint8_t *)&Conductivity + 1) );
-        TinyWireS.send( *((uint8_t *)&Conductivity + 2) );
-        TinyWireS.send( *((uint8_t *)&Conductivity + 3) );
+                TinyWireS.send( *((uint8_t *)&Conductivity ) );
+                TinyWireS.send( *((uint8_t *)&Conductivity + 1) );
+                TinyWireS.send( *((uint8_t *)&Conductivity + 2) );
+                TinyWireS.send( *((uint8_t *)&Conductivity + 3) );
 
-        TinyWireS.send( *((uint8_t *)&Temperature ) );
-        TinyWireS.send( *((uint8_t *)&Temperature + 1) );
-        TinyWireS.send( *((uint8_t *)&Temperature + 2) );
-        TinyWireS.send( *((uint8_t *)&Temperature + 3) );
+                TinyWireS.send( *((uint8_t *)&Temperature ) );
+                TinyWireS.send( *((uint8_t *)&Temperature + 1) );
+                TinyWireS.send( *((uint8_t *)&Temperature + 2) );
+                TinyWireS.send( *((uint8_t *)&Temperature + 3) );
 
-        TinyWireS.send( *((uint8_t *)&K ) );
-        TinyWireS.send( *((uint8_t *)&K + 1) );
-        TinyWireS.send( *((uint8_t *)&K + 2) );
-        TinyWireS.send( *((uint8_t *)&K + 3) );
-
+                TinyWireS.send( *((uint8_t *)&K ) );
+                TinyWireS.send( *((uint8_t *)&K + 1) );
+                TinyWireS.send( *((uint8_t *)&K + 2) );
+                TinyWireS.send( *((uint8_t *)&K + 3) );
 }
 
 /*!
@@ -92,7 +90,10 @@ void setup()
 
         K = readK();
 
+        timer1_disable();
+
         ds18.setResolution(TEMP_12_BIT);
+
 }
 
 /*!
@@ -100,6 +101,15 @@ void setup()
  */
 void loop()
 {
+        set_sleep_mode(SLEEP_MODE_IDLE);
+        adc_disable();
+        ac_disable();
+        sleep_enable();
+        sleep_mode();
+        sleep_disable();
+        adc_enable();
+        ac_enable();
+
         TinyWireS_stop_check();
         if (startEC)
         {
@@ -113,6 +123,7 @@ void loop()
                 saveK();
                 startK = false;
         }
+
 }
 
 /*!
@@ -136,7 +147,6 @@ void readEC()
 
         outputV = (inputV * analogRaw) / 1024.0;
         Conductivity = (outputV * (Resistor + pinResistance)) / (inputV - outputV) - pinResistance;
-        //Conductivity = Conductivity - pinResistance;
 }
 
 /*!
@@ -150,8 +160,8 @@ void readTemperature()
 }
 
 /*!
-  \brief Reads the cell constant #K from EEPROM.
-  \return the cell constant float #K
+   \brief Reads the cell constant #K from EEPROM.
+   \return the cell constant float #K
  */
 float readK()
 {

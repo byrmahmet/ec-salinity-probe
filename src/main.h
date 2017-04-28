@@ -3,20 +3,30 @@
 #include <DallasTemperature.h>
 #include <TinyWireS.h>
 #include <EEPROM.h>
+#include <avr/sleep.h>
+#include <avr/power.h>
+#include <avr/interrupt.h>
 
 // i2c setup
 #define EC_SALINITY 0x13
 #define START_MEASUREMENT 0x00
 #define SET_K 0x01
+#define SET_DUAL_POINT 0x02
+#define GET_DUAL_POINT 0x03
 
 // ec setup pins
 #define EC_PIN 3
 #define POWER_PIN 1
-//#define PIN_R 25         // pin resistance 22.5 @5 11.5@3
 
 #define DS18_PIN 4
 OneWire oneWire(DS18_PIN);
 DallasTemperature ds18(&oneWire);
+
+#define adc_disable() (ADCSRA &= ~(1<<ADEN)) // disable ADC (before power-off)
+#define adc_enable()  (ADCSRA |=  (1<<ADEN)) // re-enable ADC
+#define ac_disable() ACSR |= _BV(ACD);        // disable analog comparator
+#define ac_enable() ACSR &= _BV(ACD)         // enable analog comparator
+#define timer1_disable() PRR |= _BV(PRTIM1)   // disable timer1_disable
 
 bool startEC = false;
 bool startCalibrate = false;
