@@ -23,161 +23,262 @@
 
 /*!
    \file main.cpp
-   \brief Main source file for EC Salinity probe firmware
+   \brief EC Salinity firmware rev 1
  */
 
-#include "main.h"
+#include <main.h>
 
-float Conductivity;                   /**< Used to store the intermediate EC value */
-float Temperature;                    /**< Temperature in C */
-float K;                              /**< Cell constant K of probe */
-
-static const int pinResistance = 23;
-static const int Resistor = 500;
-
-/*!
-   \brief Called when data is requested over the I2C bus. Sends #Conductivity,
-   #Temperature, and #K
- */
 void requestEvent()
 {
-                TinyWireS.send( *((uint8_t *)&Conductivity ) );
-                TinyWireS.send( *((uint8_t *)&Conductivity + 1) );
-                TinyWireS.send( *((uint8_t *)&Conductivity + 2) );
-                TinyWireS.send( *((uint8_t *)&Conductivity + 3) );
+        TinyWireS.send(*((uint8_t *)&i2c_register + reg_position));
 
-                TinyWireS.send( *((uint8_t *)&Temperature ) );
-                TinyWireS.send( *((uint8_t *)&Temperature + 1) );
-                TinyWireS.send( *((uint8_t *)&Temperature + 2) );
-                TinyWireS.send( *((uint8_t *)&Temperature + 3) );
-
-                TinyWireS.send( *((uint8_t *)&K ) );
-                TinyWireS.send( *((uint8_t *)&K + 1) );
-                TinyWireS.send( *((uint8_t *)&K + 2) );
-                TinyWireS.send( *((uint8_t *)&K + 3) );
+        reg_position++;
+        if (reg_position >= reg_size)
+        {
+                reg_position = 0;
+        }
 }
 
-/*!
-   \brief Called when data is received over I2C bus
-   \param howMany the number of bytes received
- */
 void receiveEvent(uint8_t howMany)
 {
-        uint8_t cmd;
-
-        cmd = TinyWireS.receive();
-        if (cmd == START_MEASUREMENT)
+        if (howMany < 1 || howMany > 16)
         {
-                startEC = true;
+                return;
         }
 
-        if (cmd == SET_K)
+        reg_position = TinyWireS.receive();
+        howMany--;
+        if (!howMany)
         {
-                startK = true;
+                return;
         }
+
+        while(howMany--)
+        {
+                *((uint8_t *)&i2c_register + reg_position) = TinyWireS.receive();
+
+                if (reg_position == EC_TASK_REGISTER)
+                {
+                        if (i2c_register.TASK == EC_MEASURE_EC) runEC = true;
+                        if (i2c_register.TASK == EC_MEASURE_TEMP) runTemp = true;
+                        if (i2c_register.TASK == EC_CALIBRATE_K) runCalibrateK = true;
+                        if (i2c_register.TASK == EC_CALIBRATE_LOW)runCalibrateLow = true;
+                        if (i2c_register.TASK == EC_CALIBRATE_HIGH) runCalibrateHigh = true;
+                }
+
+                if (reg_position == EC_K_REGISTER) EEPROM.put(EC_K_REGISTER, i2c_register.K);
+                //if (reg_position == EC_CONFIG_REGISTER) EEPROM.put(EC_CONFIG_REGISTER, i2c_register.CONFIG);
+                //if (reg_position == EC_ACCURACY_REGISTER) EEPROM.put(EC_ACCURACY_REGISTER, i2c_register.accuracy);
+                if (reg_position == EC_CALIBRATE_REFHIGH_REGISTER) EEPROM.put(EC_CALIBRATE_REFHIGH_REGISTER, i2c_register.referenceHigh);
+                if (reg_position == EC_CALIBRATE_REFLOW_REGISTER) EEPROM.put(EC_CALIBRATE_REFLOW_REGISTER, i2c_register.referenceLow);
+                if (reg_position == EC_CALIBRATE_READHIGH_REGISTER) EEPROM.put(EC_CALIBRATE_READHIGH_REGISTER, i2c_register.readingHigh);
+                if (reg_position == EC_CALIBRATE_READLOW_REGISTER) EEPROM.put(EC_CALIBRATE_READLOW_REGISTER, i2c_register.readingLow);
+
+                reg_position++;
+                if (reg_position >= reg_size)
+                {
+                        reg_position = 0;
+                }
+        }
+
 }
 
-/*!
-   \brief Starts I2C, sets pin modes and reads #K from EEPROM
- */
 void setup()
 {
-        TinyWireS.begin(EC_SALINITY);
-        TinyWireS.onRequest(requestEvent);
-        TinyWireS.onReceive(receiveEvent);
-
+        timer1_disable();
+        ds18.setResolution(TEMP_12_BIT);
         pinMode(POWER_PIN, OUTPUT);
 
-        K = readK();
+        i2c_register.CONFIG.useTempCompensation = true;
+        i2c_register.CONFIG.useDualPoint = false;
+        i2c_register.tempConstant = 0xFF;
+        i2c_register.accuracy = 9;
+        i2c_register.version = 1;
 
-        timer1_disable();
+        EEPROM.get(EC_K_REGISTER, i2c_register.K);
+        //EEPROM.get(EC_CONFIG_REGISTER, i2c_register.CONFIG);
+        //EEPROM.get(EC_ACCURACY_REGISTER, i2c_register.accuracy);
+        EEPROM.get(EC_CALIBRATE_REFHIGH_REGISTER, i2c_register.referenceHigh);
+        EEPROM.get(EC_CALIBRATE_REFLOW_REGISTER, i2c_register.referenceLow);
+        EEPROM.get(EC_CALIBRATE_READHIGH_REGISTER, i2c_register.readingHigh);
+        EEPROM.get(EC_CALIBRATE_READLOW_REGISTER, i2c_register.readingLow);
 
-        ds18.setResolution(TEMP_12_BIT);
-
+        TinyWireS.begin(EC_SALINITY);
+        TinyWireS.onReceive(receiveEvent);
+        TinyWireS.onRequest(requestEvent);
 }
 
-/*!
-   \brief Checks #startEC and #startK for true and calls their routines
- */
 void loop()
 {
-        set_sleep_mode(SLEEP_MODE_IDLE);
-        adc_disable();
-        ac_disable();
-        sleep_enable();
-        sleep_mode();
-        sleep_disable();
-        adc_enable();
-        ac_enable();
+        sleep();
 
         TinyWireS_stop_check();
-        if (startEC)
+
+        if (runTemp)
         {
-                readEC();
-                readTemperature();
-                startEC = false;
+                ds18.requestTemperatures();
+                i2c_register.tempC = ds18.getTempCByIndex(0);
+                runTemp = false;
         }
 
-        if (startK)
+        if (runEC)
         {
-                saveK();
-                startK = false;
+                i2c_register.mS = measureConductivity();
+                runEC = false;
         }
 
+        if (runCalibrateK)
+        {
+                calibrateK();
+                runCalibrateK = false;
+        }
+
+        if (runCalibrateLow)
+        {
+                calibrateLow();
+                runCalibrateLow = false;
+        }
+
+        if (runCalibrateHigh)
+        {
+                calibrateHigh();
+                runCalibrateHigh = false;
+        }
 }
 
-/*!
-   \brief Reads the electrical conductivity between #EC_PIN and #EC_POWER_PIN.
-   Global variable #Conductivity holds the value. Further processings is done on the
-   master device side to determine actual EC with cell constant and temperature
-   compensation.
- */
-void readEC()
+float measureConductivity()
 {
         float inputV;
         float outputV;
         int analogRaw;
+        RunningMedian conductivityMedian = RunningMedian(i2c_register.accuracy);
+        int middleThird = i2c_register.accuracy / 3;
 
-        digitalWrite(POWER_PIN, HIGH);
-        analogRead(EC_PIN);
-        analogRaw = analogRead(EC_PIN);
-        digitalWrite(POWER_PIN, LOW);
+        int i = i2c_register.accuracy;
+        while(i--)
+        {
+                digitalWrite(POWER_PIN, HIGH);
+                analogRead(EC_PIN);
+                analogRaw = analogRead(EC_PIN);
+                conductivityMedian.add(analogRaw);
+                digitalWrite(POWER_PIN, LOW);
+                tws_delay(10);
+        }
 
         inputV = getVin();
 
-        outputV = (inputV * analogRaw) / 1024.0;
-        Conductivity = (outputV * (Resistor + pinResistance)) / (inputV - outputV) - pinResistance;
+        outputV = (inputV * conductivityMedian.getAverage(middleThird)) / 1024.0;
+        conductivity = (outputV * (Resistor + pinResistance)) / (inputV - outputV) - pinResistance;
+
+        float mS = 1000 / (conductivity * i2c_register.K);
+
+        if (i2c_register.CONFIG.useTempCompensation)
+        {
+                if (i2c_register.tempConstant == 0xFF)
+                {
+                        mS  =  mS / (1 + i2c_register.tempCoef * (i2c_register.tempC - 25.0));
+                        _salinity(i2c_register.tempC);
+                }
+                else
+                {
+                        mS  =  mS / (1 + i2c_register.tempCoef * (i2c_register.tempConstant - 25.0));
+                        _salinity(i2c_register.tempConstant);
+                }
+        }
+
+        if (i2c_register.CONFIG.useDualPoint)
+        {
+                float referenceRange = i2c_register.referenceHigh - i2c_register.referenceLow;
+                float readingRange = i2c_register.readingHigh - i2c_register.readingLow;
+
+                mS = (((mS - i2c_register.readingLow) * referenceRange) / readingRange) + i2c_register.referenceLow;
+        }
+        return mS;
 }
 
-/*!
-   \brief Reads the temperature in C from the connected DS18B20 device.
-   Global variable #Temperature holds the value;
- */
-void readTemperature()
+void calibrateK()
 {
-        ds18.requestTemperatures();
-        Temperature = ds18.getTempCByIndex(0);
+        float ec;
+        RunningMedian conductivityMedian = RunningMedian(i2c_register.accuracy);
+
+        int middleThird = i2c_register.accuracy / 3;
+
+        int i = i2c_register.accuracy;
+        while(i--)
+        {
+                measureConductivity();
+                conductivityMedian.add(conductivity);
+                tws_delay(250);
+        }
+
+        ec  =  i2c_register.solutionEC * (1 + i2c_register.tempCoef * (i2c_register.tempC - 25.0));
+
+        i2c_register.K = 1000 / ( conductivityMedian.getAverage(middleThird) * ec );
+        EEPROM.put(EC_K_REGISTER, i2c_register.K);
 }
 
-/*!
-   \brief Reads the cell constant #K from EEPROM.
-   \return the cell constant float #K
- */
-float readK()
+void calibrateLow()
 {
-        float k;
-        EEPROM.get(0, k);
-        return k;
+        i2c_register.referenceLow = i2c_register.solutionEC;
+        measureConductivity();
+        i2c_register.readingLow = i2c_register.mS;
+        EEPROM.put(EC_CALIBRATE_REFLOW_REGISTER, i2c_register.referenceLow);
+        EEPROM.put(EC_CALIBRATE_READLOW_REGISTER, i2c_register.readingLow);
 }
 
-/*!
-   \brief Reads the value of #K from master device and saves it to EEPROM.
- */
-void saveK()
+void calibrateHigh()
 {
-        *((uint8_t *)&K) = TinyWireS.receive();
-        *((uint8_t *)&K + 1) = TinyWireS.receive();
-        *((uint8_t *)&K + 2) = TinyWireS.receive();
-        *((uint8_t *)&K + 3) = TinyWireS.receive();
-        EEPROM.put(0, K);
+        i2c_register.referenceHigh = i2c_register.solutionEC;
+        measureConductivity();
+        i2c_register.readingHigh = i2c_register.mS;
+        EEPROM.put(EC_CALIBRATE_REFHIGH_REGISTER, i2c_register.referenceHigh);
+        EEPROM.put(EC_CALIBRATE_READHIGH_REGISTER, i2c_register.readingHigh);
+}
+
+void _salinity(float temp)
+{
+        float r, ds, r2;
+
+        float a0 = 0.008;
+        float a1 = -0.1692;
+        float a2 = 25.3851;
+        float a3 = 14.0941;
+        float a4 = -7.0261;
+        float a5 = 2.7081;
+
+        float b0 = 0.0005;
+        float b1 = -0.0056;
+        float b2 = -0.0066;
+        float b3 = -0.0375;
+        float b4 = 0.0636;
+        float b5 = -0.0144;
+
+        float c0 = 0.6766097;
+        float c1 = 0.0200564;
+        float c2 = 0.0001104259;
+        float c3 = -0.00000069698;
+        float c4 = 0.0000000010031;
+
+        r = (i2c_register.mS * 1000) / 42900;
+        r /= (c0 + temp * (c1 + temp * (c2 + temp * (c3 + temp * c4))));
+
+        r2 = sqrtf(r);
+        ds = b0 + r2 * (b1 + r2 * (b2 + r2 * (b3 + r2 * (b4 + r2 * b5))));
+        ds = ds * ((temp - 15.0) / (1.0 + 0.0162 * (temp - 15.0)));
+
+        // the formula to convert between EC and PSU is not valid for values
+        // below 2 and above 42, or for temperatures below -2C or above 35C.
+        i2c_register.salinityPSU = a0 + r2 * (a1 + r2 * (a2 + r2 * (a3 + r2 * (a4 + r2 * a5)))) + ds;
+
+        if (i2c_register.salinityPSU < 2 || i2c_register.salinityPSU > 42)
+        {
+                i2c_register.salinityPSU = -1;
+                return;
+        }
+
+        if (i2c_register.tempC < -2 || i2c_register.tempC > 35)
+        {
+                i2c_register.salinityPSU = -1;
+                return;
+        }
 }
