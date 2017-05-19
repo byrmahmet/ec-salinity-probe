@@ -18,10 +18,3 @@ An ATTiny85 programmed as an I2C slave, a DS18B20 waterproof temperature probe, 
 
 #### Using it
 An Arduino-compatible [library](https://github.com/u-fire/ECSalinity) is provided to make using the probe easy and there is extensive [documentation](http://ufire.co/ECSalinity/) on the use and setup of the device.
-
-{% highlight c++ %}
-#include <ECSalinity.h>
-EC_Salinity ec;
-
-mS = ec.measureEC(ec.tempCoefEC);
-{% endhighlight %}
