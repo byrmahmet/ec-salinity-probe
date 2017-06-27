@@ -10,7 +10,7 @@ saltwater pools, soil salinity, water quality
 
 [Buy one](http://www.tindie.com)    
 or make one with the [source code](https://www.github.com/u-fire/ec-salinity-probe) and [schematics](https://upverter.com/justind000/19cb71ec38391a95/EC-Salinity-Probe/).  
-You can also have the [board made](http://dirtypcbs.com/store/user/manage/d91w/19cb71ec38391a95_14924452820000_gerber.zip)
+You can also have the [board made](http://dirtypcbs.com/store/user/manage/ey20/ECSalinity_rev1.zip)
 and get all the board components at [Mouser](http://www.mouser.com/ProjectManager/ProjectDetail.aspx?AccessID=02223dd686)
 
 #### What it is
