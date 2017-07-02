@@ -65,6 +65,7 @@ void receiveEvent(uint8_t howMany)
       if (i2c_register.TASK == EC_CALIBRATE_PROBE) runCalibrateProbe = true;
       if (i2c_register.TASK == EC_CALIBRATE_LOW) runCalibrateLow = true;
       if (i2c_register.TASK == EC_CALIBRATE_HIGH) runCalibrateHigh = true;
+      if (i2c_register.TASK == EC_CALCULATE_K) runcalculateK = true;
     }
 
     // save things when all 4 bytes of the float have been received
@@ -142,11 +143,18 @@ void loop()
     calibrateHigh();
     runCalibrateHigh = false;
   }
+
+  if (runcalculateK)
+  {
+    calculateK();
+    runcalculateK           = false;
+  }
+
 }
 
 float measureConductivity()
 {
-  float inputV, outputV, workingTemp, mS;
+  float inputV, outputV, mS;
   int   analogRaw;
   RunningMedian conductivityMedian = RunningMedian(i2c_register.accuracy);
   int middleThird                  = i2c_register.accuracy / 3;
@@ -279,4 +287,19 @@ void _salinity(float temp)
     i2c_register.salinityPSU = -1;
     return;
   }
+}
+
+void calculateK()
+{
+  float ec;
+
+  // Global variable conductivity will be updated after this call
+  measureConductivity();
+
+  // Determine the conductivity.
+  ec =  i2c_register.solutionEC * (1.0 + i2c_register.tempCoef * (workingTemp - 25.0));
+
+  // update the register with the new calibration and save it to EEPROM
+  i2c_register.K = (1000.0 / (conductivity * ec) * 100);
+  EEPROM.put(EC_K_REGISTER, i2c_register.K);
 }

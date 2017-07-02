@@ -12,6 +12,7 @@
 #define EC_CALIBRATE_PROBE 20
 #define EC_CALIBRATE_LOW 10
 #define EC_CALIBRATE_HIGH 8
+#define EC_CALCULATE_K 2
 
 #define EC_VERSION_REGISTER 0             /*!< version register */
 #define EC_MS_REGISTER 1                  /*!< mS register */
@@ -76,6 +77,7 @@ float measureConductivity();
 void  calibrateProbe();
 void  calibrateLow();
 void  calibrateHigh();
+void  calculateK();
 void  sleep();
 void  _salinity(float temp);
 
@@ -84,10 +86,12 @@ bool runTemp           = false;
 bool runCalibrateProbe = false;
 bool runCalibrateHigh  = false;
 bool runCalibrateLow   = false;
+bool runcalculateK     = false;
 
 static const int pinResistance = 25;
 static const int Resistor      = 500;
 float conductivity;
+float workingTemp;
 
 void inline sleep()
 {
