@@ -123,7 +123,7 @@ void loop()
   if (runEC)
   {
     measureConductivity();
-    runEC           = false;
+    runEC = false;
   }
 
   if (runCalibrateProbe)
@@ -147,9 +147,8 @@ void loop()
   if (runcalculateK)
   {
     calculateK();
-    runcalculateK           = false;
+    runcalculateK = false;
   }
-
 }
 
 float measureConductivity()
@@ -172,12 +171,12 @@ float measureConductivity()
     tws_delay(10);
   }
 
-  // Get the current VIN to convert the ADC reading into voltage, conductivity
+  // Get the current VIN to convert the ADC reading into resistivity, conductivity
   // and mS.
   inputV       = getVin();
   outputV      = (inputV * conductivityMedian.getAverage(middleThird)) / 1024.0;
-  conductivity = (outputV * (Resistor + pinResistance)) / (inputV - outputV) - pinResistance;
-  mS           = (1000.0 / ((conductivity * i2c_register.K)) * 100);
+  conductivity = ((outputV * Resistor) / (inputV - outputV)) - pinResistance;
+  mS           = (i2c_register.K * 1000) / conductivity;
 
   // Compensate for temperature if configured.
   if (i2c_register.CONFIG.useTempCompensation)
@@ -185,13 +184,13 @@ float measureConductivity()
     if (i2c_register.tempConstant == 0xFF)
     {
       // Use the actual temperature.
-      mS =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempC - 25.0));
+      mS          =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempC - 25.0));
       workingTemp = i2c_register.tempC;
     }
     else
     {
       // Use a constant temperature rather than the actual if configured.
-      mS =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempConstant - 25.0));
+      mS          =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempConstant - 25.0));
       workingTemp = i2c_register.tempConstant;
     }
   }
@@ -291,15 +290,17 @@ void _salinity(float temp)
 
 void calculateK()
 {
-  float ec;
+  float solutionEC;
 
   // Global variable conductivity will be updated after this call
   measureConductivity();
 
-  // Determine the conductivity.
-  ec =  i2c_register.solutionEC * (1.0 + i2c_register.tempCoef * (workingTemp - 25.0));
+  // Compensate for temperature
+  // workingTemp is already set to the temperature the device should be using
+  // in measureConductivity()
+  solutionEC =  i2c_register.solutionEC * (1.0 + i2c_register.tempCoef * (workingTemp - 25.0));
 
-  // update the register with the new calibration and save it to EEPROM
-  i2c_register.K = (1000.0 / (conductivity * ec) * 100);
+  // Determine K
+  i2c_register.K = (conductivity * solutionEC) / 1000;
   EEPROM.put(EC_K_REGISTER, i2c_register.K);
 }

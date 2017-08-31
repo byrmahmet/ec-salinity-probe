@@ -1,4 +1,4 @@
-### EC_Salinity Probe
+### EC_Salinity Probe Interface
 
 >Monitor hydroponic nutrient levels, salinity in aquariums, the ocean,
 or pools, measure soil salinity, monitor water quality
