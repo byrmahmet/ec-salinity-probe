@@ -110,7 +110,7 @@ void setup()
 
 void loop()
 {
-  sleep();
+  low_power();
   TinyWireS_stop_check();
 
   if (runTemp)

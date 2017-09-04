@@ -93,7 +93,7 @@ static const int Resistor      = 500;
 float conductivity;
 float workingTemp;
 
-void inline sleep()
+void inline low_power()
 {
   set_sleep_mode(SLEEP_MODE_IDLE);
   adc_disable();
