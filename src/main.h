@@ -31,19 +31,6 @@
 #define EC_CONFIG_REGISTER 47             /*!< config register */
 #define EC_TASK_REGISTER 48               /*!< task register */
 
-#define DS18_PIN 4
-#define EC_PIN 3
-#define POWER_PIN 1
-
-#define adc_disable() (ADCSRA &= ~(1 << ADEN)) // disable ADC (before power-off)
-#define adc_enable() (ADCSRA |=  (1 << ADEN))  // re-enable ADC
-#define ac_disable() ACSR    |= _BV(ACD);      // disable analog comparator
-#define ac_enable() ACSR     &= _BV(ACD)       // enable analog comparator
-#define timer1_disable() PRR |= _BV(PRTIM1)    // disable timer1_disable
-
-OneWire oneWire(DS18_PIN);
-DallasTemperature ds18(&oneWire);
-
 struct config
 {
   byte useDualPoint        : 1; // 0
@@ -72,6 +59,19 @@ struct rev1_register {
 
 volatile byte reg_position;
 const byte    reg_size = sizeof(i2c_register);
+
+#define DS18_PIN 4
+#define EC_PIN 3
+#define POWER_PIN 1
+
+#define adc_disable() (ADCSRA &= ~(1 << ADEN)) // disable ADC (before power-off)
+#define adc_enable() (ADCSRA |=  (1 << ADEN))  // re-enable ADC
+#define ac_disable() ACSR    |= _BV(ACD);      // disable analog comparator
+#define ac_enable() ACSR     &= _BV(ACD)       // enable analog comparator
+#define timer1_disable() PRR |= _BV(PRTIM1)    // disable timer1_disable
+
+OneWire oneWire(DS18_PIN);
+DallasTemperature ds18(&oneWire);
 
 float measureConductivity();
 void  calibrateProbe();

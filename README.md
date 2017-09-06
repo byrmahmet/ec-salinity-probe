@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/u-fire/ec-salinity-probe.svg?branch=master)](https://travis-ci.org/u-fire/ec-salinity-probe)
+
 ### EC_Salinity Probe Interface
 
 >Monitor hydroponic nutrient levels, salinity in aquariums, the ocean,
