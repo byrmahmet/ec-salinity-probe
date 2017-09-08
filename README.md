@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/u-fire/ec-salinity-probe.svg?branch=master)](https://travis-ci.org/u-fire/ec-salinity-probe)
+[![Codacy grade](https://img.shields.io/codacy/grade/9230f66847aa45148465aa5381e6e57d.svg)]()
 
 ### EC_Salinity Probe Interface
 
