@@ -39,6 +39,12 @@ install:
 script:
     - platformio run
 
+notifications:
+  email:
+    recipients:
+      - justin@ufire.co
+    on_success: never # default: change
+    on_failure: always # default: always
 
 #
 # Template #2: The project is intended to by used as a library with examples
