@@ -173,10 +173,12 @@ float measureConductivity()
 
   // Get the current VIN to convert the ADC reading into resistivity, conductivity
   // and mS.
-  inputV       = getVin();
-  outputV      = (inputV * conductivityMedian.getAverage(middleThird)) / 1024.0;
-  conductivity = ((outputV * Resistor) / (inputV - outputV)) - pinResistance;
-  mS           = (i2c_register.K * 1000) / conductivity;
+  inputV  = getVin();
+  outputV = (inputV * conductivityMedian.getAverage(middleThird)) / 1024.0;
+  float R = (inputV / outputV) - 1;
+  R            = 500 * R;
+  conductivity = 1 / R;
+  mS           = (R * (i2c_register.K / 10));
 
   // Compensate for temperature if configured.
   if (i2c_register.CONFIG.useTempCompensation)
@@ -301,6 +303,6 @@ void calculateK()
   solutionEC =  i2c_register.solutionEC * (1.0 + i2c_register.tempCoef * (workingTemp - 25.0));
 
   // Determine K
-  i2c_register.K = (conductivity * solutionEC) / 1000;
+  i2c_register.K = (conductivity * solutionEC) * 10;
   EEPROM.put(EC_K_REGISTER, i2c_register.K);
 }
