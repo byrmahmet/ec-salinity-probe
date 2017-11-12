@@ -25,6 +25,11 @@
 /*!
    \file main.cpp
    \brief EC Salinity firmware ver 1
+
+   ufire.co for links to documentation, examples, and libraries
+   github.com/u-fire/ec-salinity-probe for feature requests, bug reports, and  questions
+   questions@ufire.co to get in touch with someone
+
  */
 
 #include <main.h>
@@ -66,6 +71,7 @@ void receiveEvent(uint8_t howMany)
       if (i2c_register.TASK == EC_CALIBRATE_LOW) runCalibrateLow = true;
       if (i2c_register.TASK == EC_CALIBRATE_HIGH) runCalibrateHigh = true;
       if (i2c_register.TASK == EC_CALCULATE_K) runcalculateK = true;
+      if (i2c_register.TASK == EC_I2C) runI2CAddress = true;
     }
 
     // save things when all 4 bytes of the float have been received
@@ -88,7 +94,7 @@ void setup()
 {
   timer1_disable();
   ds18.setResolution(TEMP_12_BIT);
-  pinMode(POWER_PIN, OUTPUT);
+  pinMode(POWER_PIN_1, OUTPUT);
 
   i2c_register.CONFIG.useTempCompensation = true;
   i2c_register.CONFIG.useDualPoint        = false;
@@ -96,12 +102,20 @@ void setup()
   i2c_register.accuracy                   = 9;
   i2c_register.version                    = 1;
 
+  EEPROM.get(EC_I2C_ADDRESS_REGISTER,        EC_SALINITY);
   EEPROM.get(EC_K_REGISTER,                  i2c_register.K);
   EEPROM.get(EC_CALIBRATE_REFHIGH_REGISTER,  i2c_register.referenceHigh);
   EEPROM.get(EC_CALIBRATE_REFLOW_REGISTER,   i2c_register.referenceLow);
   EEPROM.get(EC_CALIBRATE_READHIGH_REGISTER, i2c_register.readingHigh);
   EEPROM.get(EC_CALIBRATE_READLOW_REGISTER,  i2c_register.readingLow);
   EEPROM.get(EC_CALIBRATE_OFFSET_REGISTER,   i2c_register.calibrationOffset);
+
+  // if the EEPROM was blank, the user hasn't changed the i2c address, make it
+  // the default address of 0x3c.
+  if (EC_SALINITY == 0xff)
+  {
+    EC_SALINITY = 0x3c;
+  }
 
   TinyWireS.begin(EC_SALINITY);
   TinyWireS.onReceive(receiveEvent);
@@ -149,6 +163,12 @@ void loop()
     calculateK();
     runcalculateK = false;
   }
+
+  if (runI2CAddress)
+  {
+    setI2CAddress();
+    runI2CAddress = false;
+  }
 }
 
 float measureConductivity()
@@ -159,17 +179,24 @@ float measureConductivity()
   int middleThird                  = i2c_register.accuracy / 3;
   int i                            = i2c_register.accuracy;
 
+  // this is to help reduce interference with other probes
+  pinMode(POWER_PIN_1, OUTPUT);
+  delay(5);
+
   // analogRead #accuracy number of times and add it to the running median
   // filter.
   while (i--)
   {
-    digitalWrite(POWER_PIN, HIGH);
-    analogRead(EC_PIN);
-    analogRaw = analogRead(EC_PIN);
+    digitalWrite(POWER_PIN_1, HIGH);
+    analogRead(EC_PIN_1);
+    analogRaw = analogRead(EC_PIN_1);
     conductivityMedian.add(analogRaw);
-    digitalWrite(POWER_PIN, LOW);
+    digitalWrite(POWER_PIN_1, LOW);
     tws_delay(10);
   }
+
+  // to reduce interference with other probes
+  pinMode(POWER_PIN_1, INPUT);
 
   // Get the current VIN to convert the ADC reading into resistivity, conductivity
   // and mS.
@@ -305,4 +332,11 @@ void calculateK()
   // Determine K
   i2c_register.K = (conductivity * solutionEC) * 10;
   EEPROM.put(EC_K_REGISTER, i2c_register.K);
+}
+
+void setI2CAddress()
+{
+  // for convenience, the accuracy register is used to send the address
+  EEPROM.put(EC_I2C_ADDRESS_REGISTER, i2c_register.accuracy);
+  TinyWireS.begin(i2c_register.accuracy);
 }

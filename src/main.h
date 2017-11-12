@@ -6,13 +6,14 @@
 #include <EEPROM.h>
 #include <RunningMedian.h>
 
-#define EC_SALINITY 0x3C /*!< EC Salinity probe I2C address */
+byte EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
 #define EC_MEASURE_EC 80
 #define EC_MEASURE_TEMP 40
 #define EC_CALIBRATE_PROBE 20
 #define EC_CALIBRATE_LOW 10
 #define EC_CALIBRATE_HIGH 8
 #define EC_CALCULATE_K 2
+#define EC_I2C 1
 
 #define EC_VERSION_REGISTER 0             /*!< version register */
 #define EC_MS_REGISTER 1                  /*!< mS register */
@@ -30,6 +31,8 @@
 #define EC_ACCURACY_REGISTER 46           /*!< accuracy register */
 #define EC_CONFIG_REGISTER 47             /*!< config register */
 #define EC_TASK_REGISTER 48               /*!< task register */
+
+#define EC_I2C_ADDRESS_REGISTER 200
 
 struct config
 {
@@ -61,8 +64,8 @@ volatile byte reg_position;
 const byte    reg_size = sizeof(i2c_register);
 
 #define DS18_PIN 4
-#define EC_PIN 3
-#define POWER_PIN 1
+#define EC_PIN_1 3
+#define POWER_PIN_1 1
 
 #define adc_disable() (ADCSRA &= ~(1 << ADEN)) // disable ADC (before power-off)
 #define adc_enable() (ADCSRA |=  (1 << ADEN))  // re-enable ADC
@@ -80,6 +83,7 @@ void  calibrateHigh();
 void  calculateK();
 void  sleep();
 void  _salinity(float temp);
+void  setI2CAddress();
 
 bool runEC             = false;
 bool runTemp           = false;
@@ -87,6 +91,7 @@ bool runCalibrateProbe = false;
 bool runCalibrateHigh  = false;
 bool runCalibrateLow   = false;
 bool runcalculateK     = false;
+bool runI2CAddress     = false;
 
 static const int pinResistance = 25;
 static const int Resistor      = 500;

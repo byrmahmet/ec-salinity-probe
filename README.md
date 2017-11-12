@@ -11,8 +11,6 @@ or pools, measure soil salinity, monitor water quality
 
 [Buy one](https://www.tindie.com/products/ufire/ec-salinity-probe-interface/)    
 or make one with the [source code](https://www.github.com/u-fire/ec-salinity-probe) and [schematics](https://upverter.com/justind000/19cb71ec38391a95/EC-Salinity-Probe/).  
-You can also have the [board made](http://dirtypcbs.com/store/designer/details/7682/4142/ecsalinity-rev1-zip)
-and get all the board components at [Mouser](http://www.mouser.com/ProjectManager/ProjectDetail.aspx?AccessID=02223dd686)
 
 #### What it is
 An ATTiny85 programmed as an I2C slave, a DS18B20 waterproof temperature probe, and a two-electrode EC probe. It measures conductance and converts it into a temperature-compensated Siemen. From that value, it derives PPM and salinity. It is accurate to ~0.5mS in seawater, and to within ~0.05mS in the hydroponic or freshwater range.
@@ -26,3 +24,6 @@ EC_Salinity ec;
 
 mS = ec.measureEC(ec.tempCoefEC);
 ~~~
+
+#### Compiling
+This is a [PlatformIO](http://platformio.org/) project. Download and install it, import this repo, and it should download all the required tools for you. It expects a USBTiny device to upload the firmware.
