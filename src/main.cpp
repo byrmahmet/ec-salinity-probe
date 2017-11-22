@@ -24,7 +24,7 @@
 
 /*!
    \file main.cpp
-   \brief EC Salinity firmware ver 1
+   \brief EC Salinity firmware ver 1a
 
    ufire.co for links to documentation, examples, and libraries
    github.com/u-fire/ec-salinity-probe for feature requests, bug reports, and  questions
@@ -100,7 +100,7 @@ void setup()
   i2c_register.CONFIG.useDualPoint        = false;
   i2c_register.tempConstant               = 0xFF;
   i2c_register.accuracy                   = 9;
-  i2c_register.version                    = 1;
+  i2c_register.version                    = VERSION;
 
   EEPROM.get(EC_I2C_ADDRESS_REGISTER,        EC_SALINITY);
   EEPROM.get(EC_K_REGISTER,                  i2c_register.K);
@@ -114,7 +114,7 @@ void setup()
   // the default address of 0x3c.
   if (EC_SALINITY == 0xff)
   {
-    EC_SALINITY = 0x3c;
+    EC_SALINITY = EC_SALINITY_DEFAULT_ADDRESS;
   }
 
   TinyWireS.begin(EC_SALINITY);
@@ -203,7 +203,7 @@ float measureConductivity()
   inputV  = getVin();
   outputV = (inputV * conductivityMedian.getAverage(middleThird)) / 1024.0;
   float R = (inputV / outputV) - 1;
-  R            = 500 * R;
+  R            = Resistor * R;
   conductivity = 1 / R;
   mS           = (R * (i2c_register.K / 10));
 

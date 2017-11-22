@@ -6,7 +6,10 @@
 #include <EEPROM.h>
 #include <RunningMedian.h>
 
-byte EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
+#define VERSION 0x1a
+#define EC_SALINITY_DEFAULT_ADDRESS 0x3C
+
+uint8_t EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
 #define EC_MEASURE_EC 80
 #define EC_MEASURE_TEMP 40
 #define EC_CALIBRATE_PROBE 20
@@ -36,32 +39,32 @@ byte EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
 
 struct config
 {
-  byte useDualPoint        : 1; // 0
-  byte useTempCompensation : 1; // 1
-  byte buffer              : 6; // 2-7
+  uint8_t useDualPoint        : 1; // 0
+  uint8_t useTempCompensation : 1; // 1
+  uint8_t buffer              : 6; // 2-7
 };
 
 struct rev1_register {
-  byte   version;           // 0
-  float  mS;                // 1-4
-  float  tempC;             // 5-8
-  float  K;                 // 9-12
-  float  solutionEC;        // 13-16
-  float  tempCoef;          // 17-20
-  float  referenceHigh;     // 21-24
-  float  referenceLow;      // 25-28
-  float  readingHigh;       // 29-32
-  float  readingLow;        // 33-36
-  float  calibrationOffset; // 37-40
-  float  salinityPSU;       // 41-44
-  byte   tempConstant;      // 45
-  byte   accuracy;          // 46
-  config CONFIG;            // 47
-  byte   TASK;              // 48
+  uint8_t version;           // 0
+  float   mS;                // 1-4
+  float   tempC;             // 5-8
+  float   K;                 // 9-12
+  float   solutionEC;        // 13-16
+  float   tempCoef;          // 17-20
+  float   referenceHigh;     // 21-24
+  float   referenceLow;      // 25-28
+  float   readingHigh;       // 29-32
+  float   readingLow;        // 33-36
+  float   calibrationOffset; // 37-40
+  float   salinityPSU;       // 41-44
+  uint8_t tempConstant;      // 45
+  uint8_t accuracy;          // 46
+  config  CONFIG;            // 47
+  uint8_t TASK;              // 48
 } i2c_register;
 
-volatile byte reg_position;
-const byte    reg_size = sizeof(i2c_register);
+volatile uint8_t reg_position;
+const uint8_t    reg_size = sizeof(i2c_register);
 
 #define DS18_PIN 4
 #define EC_PIN_1 3
@@ -130,7 +133,7 @@ float getVin()
   tws_delay(2);
   ADCSRA |= _BV(ADSC);
 
-  while (bit_is_set(ADCSRA, ADSC)) ;
+  while (bit_is_set(ADCSRA, ADSC));
 
   uint8_t low  = ADCL;
   uint8_t high = ADCH;
