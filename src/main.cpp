@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Justin Decker
+// Copyright (c) 2018 Justin Decker
 
 //
 // MIT License
@@ -24,7 +24,7 @@
 
 /*!
    \file main.cpp
-   \brief EC Salinity firmware ver 1a
+   \brief EC Salinity firmware ver 1c
 
    ufire.co for links to documentation, examples, and libraries
    github.com/u-fire/ec-salinity-probe for feature requests, bug reports, and  questions
@@ -33,6 +33,20 @@
  */
 
 #include <main.h>
+
+double readADC(int channel)
+{
+  uint32_t total       = 0UL;
+  uint16_t sampleCount = 4096;
+
+  for (uint16_t i = 0; i < sampleCount; i++) {
+    total += analogRead(channel);
+  }
+
+  total = total >> 6;
+  double proportional = (total * 1.0) / (0b00000001 << 6);
+  return proportional;
+}
 
 void requestEvent()
 {
@@ -70,8 +84,8 @@ void receiveEvent(uint8_t howMany)
       if (i2c_register.TASK == EC_CALIBRATE_PROBE) runCalibrateProbe = true;
       if (i2c_register.TASK == EC_CALIBRATE_LOW) runCalibrateLow = true;
       if (i2c_register.TASK == EC_CALIBRATE_HIGH) runCalibrateHigh = true;
-      if (i2c_register.TASK == EC_CALCULATE_K) runcalculateK = true;
       if (i2c_register.TASK == EC_I2C) runI2CAddress = true;
+      if (i2c_register.TASK == EC_DRY) runDry = true;
     }
 
     // save things when all 4 bytes of the float have been received
@@ -81,6 +95,8 @@ void receiveEvent(uint8_t howMany)
     if (reg_position == (EC_CALIBRATE_READHIGH_REGISTER + 3)) EEPROM.put(EC_CALIBRATE_READHIGH_REGISTER, i2c_register.readingHigh);
     if (reg_position == (EC_CALIBRATE_READLOW_REGISTER + 3)) EEPROM.put(EC_CALIBRATE_READLOW_REGISTER, i2c_register.readingLow);
     if (reg_position == (EC_CALIBRATE_OFFSET_REGISTER + 3)) EEPROM.put(EC_CALIBRATE_OFFSET_REGISTER, i2c_register.calibrationOffset);
+    if (reg_position == (EC_TEMP_COMPENSATION_REGISTER)) EEPROM.put(EC_TEMP_COMPENSATION_REGISTER, i2c_register.tempConstant);
+    if (reg_position == (EC_CONFIG_REGISTER)) EEPROM.put(EC_CONFIG_REGISTER, i2c_register.CONFIG);
 
     reg_position++;
     if (reg_position >= reg_size)
@@ -94,13 +110,12 @@ void setup()
 {
   timer1_disable();
   ds18.setResolution(TEMP_12_BIT);
-  pinMode(POWER_PIN_1, OUTPUT);
+  pinMode(EC_PIN, INPUT);
 
-  i2c_register.CONFIG.useTempCompensation = true;
-  i2c_register.CONFIG.useDualPoint        = false;
-  i2c_register.tempConstant               = 0xFF;
-  i2c_register.accuracy                   = 9;
-  i2c_register.version                    = VERSION;
+  // set prescaler
+  sbi(ADCSRA, ADPS2);
+  cbi(ADCSRA, ADPS1);
+  cbi(ADCSRA, ADPS0);
 
   EEPROM.get(EC_I2C_ADDRESS_REGISTER,        EC_SALINITY);
   EEPROM.get(EC_K_REGISTER,                  i2c_register.K);
@@ -109,12 +124,27 @@ void setup()
   EEPROM.get(EC_CALIBRATE_READHIGH_REGISTER, i2c_register.readingHigh);
   EEPROM.get(EC_CALIBRATE_READLOW_REGISTER,  i2c_register.readingLow);
   EEPROM.get(EC_CALIBRATE_OFFSET_REGISTER,   i2c_register.calibrationOffset);
+  EEPROM.get(EC_DRY_REGISTER,                i2c_register.dry);
+  EEPROM.get(EC_TEMP_COMPENSATION_REGISTER,  i2c_register.tempConstant);
+  EEPROM.get(EC_CONFIG_REGISTER,             i2c_register.CONFIG);
 
-  // if the EEPROM was blank, the user hasn't changed the i2c address, make it
-  // the default address of 0x3c.
+  i2c_register.version = VERSION;
+  i2c_register.tempC   = -127;
+
+  // if the EEPROM was blank, the i2c address hasn't been changed, make it the default address of 0x3c.
   if (EC_SALINITY == 0xff)
   {
     EC_SALINITY = EC_SALINITY_DEFAULT_ADDRESS;
+  }
+
+  // check for first time powerup and set default config
+  if (i2c_register.CONFIG.buffer == 0b111111)
+  {
+    i2c_register.CONFIG.useTempCompensation = 0;
+    i2c_register.tempConstant               = 0;
+    i2c_register.CONFIG.useDualPoint        = 0;
+    i2c_register.CONFIG.buffer              = 0;
+    EEPROM.put(EC_CONFIG_REGISTER, i2c_register.CONFIG);
   }
 
   TinyWireS.begin(EC_SALINITY);
@@ -126,7 +156,6 @@ void loop()
 {
   low_power();
   TinyWireS_stop_check();
-
   if (runTemp)
   {
     ds18.requestTemperatures();
@@ -134,94 +163,77 @@ void loop()
     runTemp            = false;
   }
 
+  TinyWireS_stop_check();
   if (runEC)
   {
     measureConductivity();
     runEC = false;
   }
 
+  TinyWireS_stop_check();
   if (runCalibrateProbe)
   {
     calibrateProbe();
     runCalibrateProbe = false;
   }
 
+  TinyWireS_stop_check();
   if (runCalibrateLow)
   {
     calibrateLow();
     runCalibrateLow = false;
   }
 
+  TinyWireS_stop_check();
   if (runCalibrateHigh)
   {
     calibrateHigh();
     runCalibrateHigh = false;
   }
 
-  if (runcalculateK)
-  {
-    calculateK();
-    runcalculateK = false;
-  }
-
+  TinyWireS_stop_check();
   if (runI2CAddress)
   {
     setI2CAddress();
     runI2CAddress = false;
   }
+
+  TinyWireS_stop_check();
+  if (runDry)
+  {
+    calibrateDry();
+    runDry = false;
+  }
 }
 
 float measureConductivity()
 {
-  float inputV, outputV, mS;
-  int   analogRaw;
-  RunningMedian conductivityMedian = RunningMedian(i2c_register.accuracy);
-  int middleThird                  = i2c_register.accuracy / 3;
-  int i                            = i2c_register.accuracy;
+  float inputV, outputV, mS, resistance;
+  uint32_t analogRaw;
 
-  // this is to help reduce interference with other probes
-  pinMode(POWER_PIN_1, OUTPUT);
-  delay(5);
+  pinMode(POWER_PIN, OUTPUT);
+  digitalWrite(POWER_PIN, HIGH);
 
-  // analogRead #accuracy number of times and add it to the running median
-  // filter.
-  while (i--)
-  {
-    digitalWrite(POWER_PIN_1, HIGH);
-    analogRead(EC_PIN_1);
-    analogRaw = analogRead(EC_PIN_1);
-    conductivityMedian.add(analogRaw);
-    digitalWrite(POWER_PIN_1, LOW);
-    tws_delay(10);
-  }
+  pinMode(SINK, OUTPUT);
+  digitalWrite(SINK, LOW);
 
-  // to reduce interference with other probes
-  pinMode(POWER_PIN_1, INPUT);
+  analogRaw = readADC(EC_PIN);
 
-  // Get the current VIN to convert the ADC reading into resistivity, conductivity
-  // and mS.
+  digitalWrite(POWER_PIN, LOW);
+  pinMode(POWER_PIN, INPUT);
+  pinMode(SINK,      INPUT);
+  digitalWrite(SINK, LOW);
+
   inputV  = getVin();
-  outputV = (inputV * conductivityMedian.getAverage(middleThird)) / 1024.0;
-  float R = (inputV / outputV) - 1;
-  R            = Resistor * R;
-  conductivity = 1 / R;
-  mS           = (R * (i2c_register.K / 10));
+  outputV = (inputV * analogRaw) / 1024.0;
+
+  resistance = Resistor * (1 / ((inputV / outputV) - 1));
+  mS         = ((100000 * i2c_register.K) / resistance);
 
   // Compensate for temperature if configured.
   if (i2c_register.CONFIG.useTempCompensation)
   {
-    if (i2c_register.tempConstant == 0xFF)
-    {
-      // Use the actual temperature.
-      mS          =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempC - 25.0));
-      workingTemp = i2c_register.tempC;
-    }
-    else
-    {
-      // Use a constant temperature rather than the actual if configured.
-      mS          =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempConstant - 25.0));
-      workingTemp = i2c_register.tempConstant;
-    }
+    mS =  mS / (1.0 + i2c_register.tempCoef * (i2c_register.tempC - i2c_register.tempConstant));
   }
 
   // Use single point adjustment, ignoring if NaN
@@ -239,8 +251,11 @@ float measureConductivity()
     mS = (((mS - i2c_register.readingLow) * referenceRange) / readingRange) + i2c_register.referenceLow;
   }
 
+  // Check if the probe is dry/disconnected
+  if (mS <= i2c_register.dry) mS = -1;
+
   i2c_register.mS = mS;
-  _salinity(workingTemp);
+  _salinity(i2c_register.tempC);
   return mS;
 }
 
@@ -295,6 +310,10 @@ void _salinity(float temp)
   float c3 = -0.00000069698;
   float c4 = 0.0000000010031;
 
+  if ((temp == -127) || (temp = 0.0))
+  {
+    temp = 25;
+  }
   r  = (i2c_register.mS * 1000) / 42900;
   r /= (c0 + temp * (c1 + temp * (c2 + temp * (c3 + temp * c4))));
 
@@ -317,26 +336,16 @@ void _salinity(float temp)
   }
 }
 
-void calculateK()
-{
-  float solutionEC;
-
-  // Global variable conductivity will be updated after this call
-  measureConductivity();
-
-  // Compensate for temperature
-  // workingTemp is already set to the temperature the device should be using
-  // in measureConductivity()
-  solutionEC =  i2c_register.solutionEC * (1.0 + i2c_register.tempCoef * (workingTemp - 25.0));
-
-  // Determine K
-  i2c_register.K = (conductivity * solutionEC) * 10;
-  EEPROM.put(EC_K_REGISTER, i2c_register.K);
-}
-
 void setI2CAddress()
 {
-  // for convenience, the accuracy register is used to send the address
-  EEPROM.put(EC_I2C_ADDRESS_REGISTER, i2c_register.accuracy);
-  TinyWireS.begin(i2c_register.accuracy);
+  // for convenience, the solution register is used to send the address
+  EEPROM.put(EC_I2C_ADDRESS_REGISTER, i2c_register.solutionEC);
+  TinyWireS.begin(i2c_register.solutionEC);
+}
+
+void calibrateDry()
+{
+  measureConductivity();
+  i2c_register.dry = i2c_register.mS;
+  EEPROM.put(EC_DRY_REGISTER, i2c_register.dry);
 }

@@ -4,10 +4,11 @@
 #include <DallasTemperature.h>
 #include <avr/sleep.h>
 #include <EEPROM.h>
-#include <RunningMedian.h>
 
-#define VERSION 0x1a
+#define VERSION 0x1c
 #define EC_SALINITY_DEFAULT_ADDRESS 0x3C
+
+#define ACCURACY 6
 
 uint8_t EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
 #define EC_MEASURE_EC 80
@@ -15,8 +16,8 @@ uint8_t EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
 #define EC_CALIBRATE_PROBE 20
 #define EC_CALIBRATE_LOW 10
 #define EC_CALIBRATE_HIGH 8
-#define EC_CALCULATE_K 2
 #define EC_I2C 1
+#define EC_DRY 81
 
 #define EC_VERSION_REGISTER 0             /*!< version register */
 #define EC_MS_REGISTER 1                  /*!< mS register */
@@ -30,10 +31,10 @@ uint8_t EC_SALINITY = 0x3C; /*!< EC Salinity probe I2C address */
 #define EC_CALIBRATE_READLOW_REGISTER 33  /*!< reading high register */
 #define EC_CALIBRATE_OFFSET_REGISTER 37   /*!< caliration offset */
 #define EC_SALINITY_PSU 41                /*!< Salinity register */
-#define EC_TEMP_COMPENSATION_REGISTER 45  /*!< temperature compensation register */
-#define EC_ACCURACY_REGISTER 46           /*!< accuracy register */
-#define EC_CONFIG_REGISTER 47             /*!< config register */
-#define EC_TASK_REGISTER 48               /*!< task register */
+#define EC_DRY_REGISTER 45                /*!< Dry calibration register */
+#define EC_TEMP_COMPENSATION_REGISTER 49  /*!< temperature compensation register */
+#define EC_CONFIG_REGISTER 50             /*!< config register */
+#define EC_TASK_REGISTER 51               /*!< task register */
 
 #define EC_I2C_ADDRESS_REGISTER 200
 
@@ -57,18 +58,19 @@ struct rev1_register {
   float   readingLow;        // 33-36
   float   calibrationOffset; // 37-40
   float   salinityPSU;       // 41-44
-  uint8_t tempConstant;      // 45
-  uint8_t accuracy;          // 46
-  config  CONFIG;            // 47
-  uint8_t TASK;              // 48
+  float   dry;               // 45-48
+  uint8_t tempConstant;      // 49
+  config  CONFIG;            // 50
+  uint8_t TASK;              // 51
 } i2c_register;
 
 volatile uint8_t reg_position;
 const uint8_t    reg_size = sizeof(i2c_register);
 
-#define DS18_PIN 4
-#define EC_PIN_1 3
-#define POWER_PIN_1 1
+#define DS18_PIN 5
+#define EC_PIN 3
+#define POWER_PIN 1
+#define SINK 4
 
 #define adc_disable() (ADCSRA &= ~(1 << ADEN)) // disable ADC (before power-off)
 #define adc_enable() (ADCSRA |=  (1 << ADEN))  // re-enable ADC
@@ -83,23 +85,29 @@ float measureConductivity();
 void  calibrateProbe();
 void  calibrateLow();
 void  calibrateHigh();
-void  calculateK();
+
 void  sleep();
 void  _salinity(float temp);
 void  setI2CAddress();
+void  calibrateDry();
 
 bool runEC             = false;
 bool runTemp           = false;
 bool runCalibrateProbe = false;
 bool runCalibrateHigh  = false;
 bool runCalibrateLow   = false;
-bool runcalculateK     = false;
 bool runI2CAddress     = false;
+bool runDry            = false;
 
 static const int pinResistance = 25;
 static const int Resistor      = 500;
-float conductivity;
-float workingTemp;
+
+#ifndef cbi
+# define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif // ifndef cbi
+#ifndef sbi
+# define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif // ifndef sbi
 
 void inline low_power()
 {
