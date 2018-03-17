@@ -110,7 +110,10 @@ void setup()
 {
   timer1_disable();
   ds18.setResolution(TEMP_12_BIT);
-  pinMode(EC_PIN, INPUT);
+
+  pinMode(EC_PIN,    INPUT);
+  pinMode(SINK,      INPUT);
+  pinMode(POWER_PIN, INPUT);
 
   // set prescaler
   sbi(ADCSRA, ADPS2);
@@ -212,17 +215,19 @@ float measureConductivity()
   uint32_t analogRaw;
 
   pinMode(POWER_PIN, OUTPUT);
+  pinMode(SINK,      OUTPUT);
   digitalWrite(POWER_PIN, HIGH);
-
-  pinMode(SINK, OUTPUT);
-  digitalWrite(SINK, LOW);
+  digitalWrite(SINK,      LOW);
 
   analogRaw = readADC(EC_PIN);
 
   digitalWrite(POWER_PIN, LOW);
+  digitalWrite(SINK,      LOW);
+  digitalWrite(EC_PIN,    LOW);
+  tws_delay(1000);
+
   pinMode(POWER_PIN, INPUT);
   pinMode(SINK,      INPUT);
-  digitalWrite(SINK, LOW);
 
   inputV  = getVin();
   outputV = (inputV * analogRaw) / 1024.0;
